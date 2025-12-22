@@ -1,6 +1,12 @@
 import cv2
 import numpy as np
 
+TAB_PROFILE = [
+    ((0.0, 0.0), (0.2, 0.0), (0.3, -0.15), (0.35, -0.15)),
+    ((0.35, -0.15), (0.2, -0.5), (0.8, -0.5), (0.65, -0.15)),
+    ((0.65, -0.15), (0.7, -0.15), (0.8, 0.0), (1.0, 0.0))
+]
+
 def generate_jigsaw_img(img):
     # cv2.imshow('my_img', img)
     # cv2.waitKey(0)
@@ -12,6 +18,50 @@ def generate_jigsaw_img(img):
     w_clean = w - (np.mod(w, 4))
     block_hw = (h_clean // 4, w_clean // 4)
     
+    
+def create_piece_edge(start, end, edge_type):
+    if edge_type == "FLAT":
+        return [start, end]
+    
+    if edge_type == "TAB":
+        pass
+    elif edge_type == "SLOT":
+        pass
+
+def transform_points(points, side, block_size, offset):
+    """
+    Transform point to reflect real coordinates on image
+    
+    :param points: A list of the raw normalized tuples from TAB_PROFILE
+    :param side: A string ("top", "bottom", "left", "right")
+    :param block_size: Integer
+    :param offset: Tuple(x, y) for the starting corner
+    """
+    new_points = []
+    off_x, off_y = offset
+    
+    for x, y in points:
+        sx = x * block_size
+        sy = y * block_size
+        
+        if side == "top":
+            rx, ry = sx, sy
+        elif side == "right":
+            rx, ry = -sy, sx
+        elif side == "bottom":
+            rx, ry = -sx, -sy
+        elif side == "left":
+            rx, ry = sy, -sx
+        else:
+            print("Invalid side provided use (top, right, bottom, left)")
+            return []
+    
+        final_x = off_x + rx
+        final_y = off_y + ry
+        new_points.append((int(final_x), int(final_y)))
+    
+    return new_points
+    
 def get_bezier_point(t, p0, p1, p2, p3):
     x0, y0 = p0
     x1, y1 = p1
@@ -20,7 +70,7 @@ def get_bezier_point(t, p0, p1, p2, p3):
     
     x_new = (1-t)**3 * x0 + 3*(1-t)**2 * t*x1 + 3*(1-t) * t**2 * x2 + t**3 * x3
     y_new = (1-t)**3 * y0 + 3*(1-t)**2 * t*y1 + 3*(1-t) * t**2 * y2 + t**3 * y3
-    return x_new, y_new
+    return (x_new, y_new)
 
 def generate_curve(num_points, p0, p1, p2, p3):
     path = []
