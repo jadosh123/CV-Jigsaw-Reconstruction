@@ -19,15 +19,36 @@ def generate_jigsaw_img(img):
     block_hw = (h_clean // 4, w_clean // 4)
     
     
-def create_piece_edge(start, end, edge_type):
+def create_piece_edge(start, end, edge_type, side, block_size):
+    """
+    Creates a Flat/Tab/Slot edge piece
+    
+    :param start: first edge corner
+    :param end: last edge corner
+    :param edge_type: FLAT or TAB or SLOT
+    :param side: The side the edge is on (top, right, bottom, left)
+    :param block_size: Size of piece
+    """
     if edge_type == "FLAT":
         return [start, end]
     
     if edge_type == "TAB":
-        pass
-    elif edge_type == "SLOT":
-        pass
+        points = []
+        for segment in TAB_PROFILE:
+            segment_points = generate_curve(20, *segment)
+            points.extend(segment_points)
 
+        return transform_points(points, side, block_size, start)
+    elif edge_type == "SLOT":
+        points = []
+        
+        for segment in TAB_PROFILE:
+            inverted_segment = [(num[0], -num[1]) for num in segment]    
+            segment_points = generate_curve(20, *inverted_segment)
+            points.extend(segment_points)
+            
+        return transform_points(points, side, block_size, start)
+        
 def transform_points(points, side, block_size, offset):
     """
     Transform point to reflect real coordinates on image
@@ -61,7 +82,7 @@ def transform_points(points, side, block_size, offset):
         new_points.append((int(final_x), int(final_y)))
     
     return new_points
-    
+
 def get_bezier_point(t, p0, p1, p2, p3):
     x0, y0 = p0
     x1, y1 = p1
