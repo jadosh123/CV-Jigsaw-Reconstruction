@@ -1,5 +1,7 @@
 import cv2
 import numpy as np
+import random
+from typing import List, Tuple, Optional
 
 TAB_PROFILE = [
     ((0.0, 0.0), (0.2, 0.0), (0.3, -0.15), (0.35, -0.15)),
@@ -7,18 +9,68 @@ TAB_PROFILE = [
     ((0.65, -0.15), (0.7, -0.15), (0.8, 0.0), (1.0, 0.0))
 ]
 
-def generate_jigsaw_img(img):
+PIECE_OPT = ["SLOT", "TAB"]
+
+class Jigsaw_Piece():
+    def __init__(self, top, right, bottom, left):
+        self.top = top
+        self.right = right
+        self.bottom = bottom
+        self.left = left
+        
+
+def generate_jigsaw_img(img, puzzle_dims: int):
     # cv2.imshow('my_img', img)
     # cv2.waitKey(0)
     # cv2.destroyAllWindows()
     h, w = img.shape[:2]
     print(f"width {w} height {h}")
     
-    h_clean = h - (np.mod(h, 4))
-    w_clean = w - (np.mod(w, 4))
-    block_hw = (h_clean // 4, w_clean // 4)
+    if puzzle_dims is None:
+        print("Please provide the puzzle dimensions (height, width).")
+        return
     
+    num_pcs_y, num_pcs_x = puzzle_dims, puzzle_dims
+    h_clean = h - (np.mod(h, num_pcs_y))
+    w_clean = w - (np.mod(w, num_pcs_x))
+    block_hw = (h_clean // num_pcs_y, w_clean // num_pcs_x)
     
+    jigsaw_mat = generate_jigsaw_pieces(num_pcs_y, num_pcs_x)
+
+def generate_jigsaw_pieces(num_pcs_y, num_pcs_x):
+    jigsaw_mat: List[List[Optional[Jigsaw_Piece]]] = [[None for _ in range(num_pcs_x)] for _ in range(num_pcs_y)]
+
+    for row in range(num_pcs_y):
+        for col in range(num_pcs_x):
+            if row == 0:
+                top = "FLAT"
+            elif jigsaw_mat[row-1][col].bottom == "TAB":
+                top = "SLOT"
+            else:
+                top = "TAB"
+
+            if col == num_pcs_x - 1:
+                right = "FLAT"
+            else:
+                right = PIECE_OPT[random.randint(0, 1)]
+            
+            if row == num_pcs_y - 1:
+                bottom = "FLAT"
+            else:
+                bottom = PIECE_OPT[random.randint(0, 1)]
+            
+            if col == 0:
+                left = "FLAT"
+            elif jigsaw_mat[row][col-1].right == "TAB":
+                left = "SLOT"
+            else:
+                left = "TAB"
+
+            piece = Jigsaw_Piece(top, right, bottom, left)
+            jigsaw_mat[row][col] = piece
+    
+    return jigsaw_mat
+
 def create_piece_edge(start, end, edge_type, side, block_size):
     """
     Creates a Flat/Tab/Slot edge piece
