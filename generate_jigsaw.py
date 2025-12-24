@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 import random
-from typing import List, Tuple, Optional
+import csv
 
 TAB_PROFILE = [
     ((0.0, 0.0), (0.1, 0.0), (0.2, 0.0), (0.3, 0.0)),
@@ -53,8 +53,8 @@ def generate_jigsaw_img(img, puzzle_dims: int):
             curr_jig.edges["BOTTOM"] = create_piece_edge(br, bl, curr_jig.bottom, "BOTTOM", bw)
             curr_jig.edges["LEFT"] = create_piece_edge(bl, tl, curr_jig.left, "LEFT", bh)
 
-    sheet = create_jigsaw_spritesheet(img, jigsaw_mat)
-    cv2.imwrite("jigsaw_spritesheet.png", sheet)
+    sheet = create_jigsaw_spritesheet(img, jigsaw_mat, bh, bw)
+    cv2.imwrite("jigsaw/jigsaw_spritesheet.png", sheet)
     print("Saved jigsaw_spritesheet.png")
             
 def extract_piece(img, contour):
@@ -81,6 +81,9 @@ def extract_piece(img, contour):
     dst_y = src_y1 - y
     
     crop_h, crop_w = valid_crop.shape[:2]
+    
+    # Paste the piece at the proper coordinates 
+    # inside the bigger roi map
     roi_full[dst_y : dst_y + crop_h, dst_x : dst_x + crop_w] = valid_crop
     
     mask = np.zeros((h, w), dtype=np.uint8)
@@ -92,7 +95,7 @@ def extract_piece(img, contour):
     
     return rgba
 
-def create_jigsaw_spritesheet(img, jigsaw_mat):
+def create_jigsaw_spritesheet(img, jigsaw_mat, bh, bw, output_csv="jigsaw/puzzle_data.csv"):
     """
     Creates a transparent spritesheet of all pieces.
     """
@@ -137,6 +140,9 @@ def create_jigsaw_spritesheet(img, jigsaw_mat):
     # Create blank transparent image (Height, Width, 4)
     spritesheet = np.zeros((sheet_h, sheet_w, 4), dtype=np.uint8)
     
+    data = []
+    piece_id = 0
+    
     for row in range(rows):
         for col in range(cols):
             contour = all_contours[row][col]
@@ -150,6 +156,33 @@ def create_jigsaw_spritesheet(img, jigsaw_mat):
             target_y = row * cell_h
             
             spritesheet[target_y : target_y + ph, target_x : target_x + pw] = piece_img
+            cnt_x, cnt_y, cnt_w, cnt_h = cv2.boundingRect(contour)
+            
+            curr_piece = jigsaw_mat[row][col]
+            data.append({
+                "id": piece_id,
+                "grid_row": row,
+                "grid_col": col,
+                "orig_x": cnt_x,
+                "orig_y": cnt_y,
+                "sheet_x": target_x,
+                "sheet_y": target_y,
+                "edge_top": curr_piece.top,
+                "edge_right": curr_piece.right,
+                "edge_bottom": curr_piece.bottom,
+                "edge_left": curr_piece.left,
+                "block_height": bh,
+                "block_width": bw,
+                "sprite_width": pw,
+                "sprite_height": ph
+            })
+            piece_id += 1
+
+    with open(output_csv, 'w', newline='') as f:
+        writer = csv.DictWriter(f, fieldnames=data[0].keys())
+        writer.writeheader()
+        writer.writerows(data)
+        print(f"Saved metadata to {output_csv}")
 
     return spritesheet
 
