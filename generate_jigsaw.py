@@ -53,20 +53,105 @@ def generate_jigsaw_img(img, puzzle_dims: int):
             curr_jig.edges["BOTTOM"] = create_piece_edge(br, bl, curr_jig.bottom, "BOTTOM", bw)
             curr_jig.edges["LEFT"] = create_piece_edge(bl, tl, curr_jig.left, "LEFT", bh)
 
-            contour = []
-            contour.extend(curr_jig.edges["TOP"][:-1])
-            contour.extend(curr_jig.edges["RIGHT"][:-1])
-            contour.extend(curr_jig.edges["BOTTOM"][:-1])
-            contour.extend(curr_jig.edges["LEFT"][:-1])
-
-            contour_np = np.array(contour, dtype=np.int32)
-            cv2.polylines(img, [contour_np], isClosed=True, color=(255, 0, 0), thickness=10)
-    
-    # 4. Show the result
-    cv2.imshow('Jigsaw Preview', img)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows() 
+    sheet = create_jigsaw_spritesheet(img, jigsaw_mat)
+    cv2.imwrite("jigsaw_spritesheet.png", sheet)
+    print("Saved jigsaw_spritesheet.png")
             
+def extract_piece(img, contour):
+    """
+    Extracts a piece safely, handling cases where the contour 
+    might slightly exceed image boundaries (clipping).
+    """
+    x, y, w, h = cv2.boundingRect(contour)
+    ih, iw = img.shape[:2]
+    
+    src_x1 = max(0, x)
+    src_y1 = max(0, y)
+    src_x2 = min(iw, x + w)
+    src_y2 = min(ih, y + h)
+    
+    # Check if we have any valid overlap
+    if src_x2 <= src_x1 or src_y2 <= src_y1:
+        return np.zeros((h, w, 4), dtype=np.uint8)
+
+    valid_crop = img[src_y1:src_y2, src_x1:src_x2]
+    roi_full = np.zeros((h, w, 3), dtype=np.uint8)
+    
+    dst_x = src_x1 - x
+    dst_y = src_y1 - y
+    
+    crop_h, crop_w = valid_crop.shape[:2]
+    roi_full[dst_y : dst_y + crop_h, dst_x : dst_x + crop_w] = valid_crop
+    
+    mask = np.zeros((h, w), dtype=np.uint8)
+    shifted_contour = contour - np.array([x, y])
+    cv2.fillPoly(mask, [shifted_contour], 255)
+    
+    b, g, r = cv2.split(roi_full)
+    rgba = cv2.merge([b, g, r, mask])
+    
+    return rgba
+
+def create_jigsaw_spritesheet(img, jigsaw_mat):
+    """
+    Creates a transparent spritesheet of all pieces.
+    """
+    rows = len(jigsaw_mat)
+    cols = len(jigsaw_mat[0])
+    
+    max_w = 0
+    max_h = 0
+    all_contours = [] 
+
+    for row in range(rows):
+        row_contours = []
+        for col in range(cols):
+            piece = jigsaw_mat[row][col]
+            if piece is None: continue
+            
+            contour_points = []
+            contour_points.extend(piece.edges["TOP"][:-1])
+            contour_points.extend(piece.edges["RIGHT"][:-1])
+            contour_points.extend(piece.edges["BOTTOM"][:-1])
+            contour_points.extend(piece.edges["LEFT"][:-1])
+            
+            contour_np = np.array(contour_points, dtype=np.int32)
+            row_contours.append(contour_np)
+            
+            x, y, w, h = cv2.boundingRect(contour_np)
+            if w > max_w: max_w = w
+            if h > max_h: max_h = h
+            
+        all_contours.append(row_contours)
+
+    padding = 2
+    cell_w = max_w + padding
+    cell_h = max_h + padding
+
+    sheet_w = cell_w * cols
+    sheet_h = cell_h * rows
+    
+    print(f"Generating Spritesheet: {sheet_w}x{sheet_h} pixels")
+    print(f"Grid Cell Size: {cell_w}x{cell_h}")
+    
+    # Create blank transparent image (Height, Width, 4)
+    spritesheet = np.zeros((sheet_h, sheet_w, 4), dtype=np.uint8)
+    
+    for row in range(rows):
+        for col in range(cols):
+            contour = all_contours[row][col]
+            
+            # Extract the individual piece
+            piece_img = extract_piece(img, contour)
+            ph, pw = piece_img.shape[:2]
+            
+            # Calculate where to put it on the sheet
+            target_x = col * cell_w
+            target_y = row * cell_h
+            
+            spritesheet[target_y : target_y + ph, target_x : target_x + pw] = piece_img
+
+    return spritesheet
 
 def generate_jigsaw_pieces(num_pcs_y, num_pcs_x):
     jigsaw_mat = [[Jigsaw_Piece(None, None, None, None) for _ in range(num_pcs_x)] for _ in range(num_pcs_y)]
