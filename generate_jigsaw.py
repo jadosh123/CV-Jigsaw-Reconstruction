@@ -3,7 +3,6 @@ import numpy as np
 import random
 import csv
 import os
-import sys
 import argparse
 
 TAB_PROFILE = [
@@ -126,7 +125,7 @@ def create_jigsaw_spritesheet(img, jigsaw_mat, bh, bw, output_csv="jigsaw/puzzle
     all_contours = [] 
 
     for row in range(rows):
-        row_contours = []
+        # row_contours = []
         for col in range(cols):
             piece = jigsaw_mat[row][col]
             if piece is None: continue
@@ -136,66 +135,71 @@ def create_jigsaw_spritesheet(img, jigsaw_mat, bh, bw, output_csv="jigsaw/puzzle
             contour_points.extend(piece.edges["RIGHT"][:-1])
             contour_points.extend(piece.edges["BOTTOM"][:-1])
             contour_points.extend(piece.edges["LEFT"][:-1])
-            
             contour_np = np.array(contour_points, dtype=np.int32)
-            row_contours.append(contour_np)
+            
+            # row_contours.append(contour_np)
             
             x, y, w, h = cv2.boundingRect(contour_np)
             if w > max_w: max_w = w
             if h > max_h: max_h = h
             
-        all_contours.append(row_contours)
+            all_contours.append({
+                "grid_row": row,
+                "grid_col": col,
+                "contour": contour_np,
+                "piece_obj": piece
+            })
+
+        # all_contours.append(row_contours)
 
     padding = 2
     cell_w = max_w + padding
     cell_h = max_h + padding
 
+    sheet_cols = cols
+    sheet_rows = rows
     sheet_w = cell_w * cols
     sheet_h = cell_h * rows
     
     print(f"Generating Spritesheet: {sheet_w}x{sheet_h} pixels")
-    print(f"Grid Cell Size: {cell_w}x{cell_h}")
-    
-    # Create blank transparent image (Height, Width, 4)
     spritesheet = np.zeros((sheet_h, sheet_w, 4), dtype=np.uint8)
     
-    data = []
-    piece_id = 0
+    random.shuffle(all_contours)
     
-    for row in range(rows):
-        for col in range(cols):
-            contour = all_contours[row][col]
-            
-            # Extract the individual piece
-            piece_img = extract_piece(img, contour)
-            ph, pw = piece_img.shape[:2]
-            
-            # Calculate where to put it on the sheet
-            target_x = col * cell_w
-            target_y = row * cell_h
-            
-            spritesheet[target_y : target_y + ph, target_x : target_x + pw] = piece_img
-            cnt_x, cnt_y, cnt_w, cnt_h = cv2.boundingRect(contour)
-            
-            curr_piece = jigsaw_mat[row][col]
-            data.append({
-                "id": piece_id,
-                "grid_row": row,
-                "grid_col": col,
-                "orig_x": cnt_x,
-                "orig_y": cnt_y,
-                "sheet_x": target_x,
-                "sheet_y": target_y,
-                "edge_top": curr_piece.top,
-                "edge_right": curr_piece.right,
-                "edge_bottom": curr_piece.bottom,
-                "edge_left": curr_piece.left,
-                "block_height": bh,
-                "block_width": bw,
-                "sprite_width": pw,
-                "sprite_height": ph
-            })
-            piece_id += 1
+    data = []
+    
+    for slot_idx, item in enumerate(all_contours):
+        slot_row = slot_idx // sheet_cols
+        slot_col = slot_idx % sheet_cols
+        
+        target_x = slot_col * cell_w
+        target_y = slot_row * cell_h
+        
+        # Extract the individual piece
+        contour = item["contour"]
+        piece_img = extract_piece(img, contour)
+        ph, pw = piece_img.shape[:2]
+        
+        spritesheet[target_y : target_y + ph, target_x : target_x + pw] = piece_img
+        cnt_x, cnt_y, cnt_w, cnt_h = cv2.boundingRect(contour)
+        
+        data.append({
+            "id": slot_idx,
+            "grid_row": item["grid_row"],
+            "grid_col": item["grid_col"],
+            "orig_x": cnt_x,
+            "orig_y": cnt_y,
+            "sheet_x": target_x,
+            "sheet_y": target_y,
+            "edge_top": item["piece_obj"].top,
+            "edge_right": item["piece_obj"].right,
+            "edge_bottom": item["piece_obj"].bottom,
+            "edge_left": item["piece_obj"].left,
+            "block_height": bh,
+            "block_width": bw,
+            "sprite_width": pw,
+            "sprite_height": ph
+        })
 
     with open(output_csv, 'w', newline='') as f:
         writer = csv.DictWriter(f, fieldnames=data[0].keys())
