@@ -1,2 +1,4 @@
 .venv
 jigsaw
+__pycache__
+.pytest_cache
