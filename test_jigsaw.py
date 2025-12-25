@@ -25,13 +25,13 @@ def test_round_trip_reconstruction():
 
     # Run Reconstruction (Get the image back as array)
     reconstruct_puzzle(csv_path, sheet_path)
-    reconstructed_path = "reconstructed_debug.png"
+    reconstructed_path = f"reconstructed/{base_name}_reconstructed.png"
     
     reconstructed_img = cv2.imread(reconstructed_path)
     original_img = cv2.imread(TEST_IMG)
     
-    assert reconstructed_img is not None
-    assert original_img is not None
+    assert reconstructed_img is not None, f"Could not find reconstructed image at: {reconstructed_path}"
+    assert original_img is not None, "Could not load original test image."
 
     # Handle Dimension Mismatch (Modulo Cropping)
     # The generator trims the original image to fit the grid.

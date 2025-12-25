@@ -3,7 +3,6 @@ import numpy as np
 import csv
 import argparse
 import os
-import sys
 
 def reconstruct_puzzle(csv_path, sheet_path):
     if not os.path.exists(csv_path):
@@ -69,7 +68,11 @@ def reconstruct_puzzle(csv_path, sheet_path):
         # Write back to canvas
         canvas[dy:dy+h, dx:dx+w] = blended.astype(np.uint8)
 
-    output_filename = "reconstructed_debug.png"
+    output_dir = "reconstructed"
+    os.makedirs(output_dir, exist_ok=True)
+    base_name = os.path.basename(csv_path).replace("_data.csv", "")
+    output_filename = os.path.join(output_dir, f"{base_name}_reconstructed.png")    
+
     cv2.imwrite(output_filename, canvas)
     print(f"Success! Reconstructed image saved to {output_filename}")
 
