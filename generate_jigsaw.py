@@ -2,6 +2,9 @@ import cv2
 import numpy as np
 import random
 import csv
+import os
+import sys
+import argparse
 
 TAB_PROFILE = [
     ((0.0, 0.0), (0.1, 0.0), (0.2, 0.0), (0.3, 0.0)),
@@ -20,7 +23,23 @@ class Jigsaw_Piece():
         self.edges = {"TOP": [], "RIGHT": [], "BOTTOM": [], "LEFT": []}
 
 
-def generate_jigsaw_img(img, puzzle_dims: int):
+def generate_jigsaw_img(img_path, puzzle_dims: int):
+    if not os.path.exists(img_path):
+        print(f"Error: File not found at {img_path}")
+        return
+    
+    img = cv2.imread(img_path)
+    if img is None:
+        print(f"Error: Could not decode image. Check file format.")
+        return
+    
+    base_name = os.path.splitext(os.path.basename(img_path))[0]
+    output_dir = "jigsaw"
+    os.makedirs(output_dir, exist_ok=True)
+    
+    sheet_name = os.path.join(output_dir, f"{base_name}_spritesheet.png")
+    csv_name = os.path.join(output_dir, f"{base_name}_data.csv")
+        
     h, w = img.shape[:2]
     print(f"width {w} height {h}")
     
@@ -53,9 +72,9 @@ def generate_jigsaw_img(img, puzzle_dims: int):
             curr_jig.edges["BOTTOM"] = create_piece_edge(br, bl, curr_jig.bottom, "BOTTOM", bw)
             curr_jig.edges["LEFT"] = create_piece_edge(bl, tl, curr_jig.left, "LEFT", bh)
 
-    sheet = create_jigsaw_spritesheet(img, jigsaw_mat, bh, bw)
-    cv2.imwrite("jigsaw/jigsaw_spritesheet.png", sheet)
-    print("Saved jigsaw_spritesheet.png")
+    sheet = create_jigsaw_spritesheet(img, jigsaw_mat, bh, bw, csv_name)
+    cv2.imwrite(sheet_name, sheet)
+    print(f"Saved: {sheet_name}")
             
 def extract_piece(img, contour):
     """
@@ -193,32 +212,26 @@ def generate_jigsaw_pieces(num_pcs_y, num_pcs_x):
         for col in range(num_pcs_x):
             curr_pc = jigsaw_mat[row][col]
             
-            if row == 0:
-                top = "FLAT"
-            elif jigsaw_mat[row-1][col].bottom == "TAB":
-                top = "SLOT"
-            else:
-                top = "TAB"
+            # Top
+            if row == 0: top = "FLAT"
+            elif jigsaw_mat[row-1][col].bottom == "TAB": top = "SLOT"
+            else: top = "TAB"
             curr_pc.top = top
 
-            if col == num_pcs_x - 1:
-                right = "FLAT"
-            else:
-                right = PIECE_OPT[random.randint(0, 1)]
+            # Right
+            if col == num_pcs_x - 1: right = "FLAT"
+            else: right = PIECE_OPT[random.randint(0, 1)]
             curr_pc.right = right
             
-            if row == num_pcs_y - 1:
-                bottom = "FLAT"
-            else:
-                bottom = PIECE_OPT[random.randint(0, 1)]
+            # Bottom
+            if row == num_pcs_y - 1: bottom = "FLAT"
+            else: bottom = PIECE_OPT[random.randint(0, 1)]
             curr_pc.bottom = bottom
             
-            if col == 0:
-                left = "FLAT"
-            elif jigsaw_mat[row][col-1].right == "TAB":
-                left = "SLOT"
-            else:
-                left = "TAB"
+            # Left
+            if col == 0: left = "FLAT"
+            elif jigsaw_mat[row][col-1].right == "TAB": left = "SLOT"
+            else: left = "TAB"
             curr_pc.left = left
     
     return jigsaw_mat
@@ -236,25 +249,18 @@ def create_piece_edge(start, end, edge_type, side, block_size):
     if edge_type == "FLAT":
         return [start, end]
     
+    points = []
     if edge_type == "TAB":
-        points = []
         for segment in TAB_PROFILE:
             segment_points = generate_curve(20, *segment)
             points.extend(segment_points)
-
-        return transform_points(points, side, block_size, start)
-    elif edge_type == "SLOT":
-        points = []
-        
+    elif edge_type == "SLOT": 
         for segment in TAB_PROFILE:
             inverted_segment = [(num[0], -num[1]) for num in segment]    
             segment_points = generate_curve(20, *inverted_segment)
             points.extend(segment_points)
             
-        return transform_points(points, side, block_size, start)
-    
-    print(f"Warning: Unknown edge type '{edge_type}'")
-    return []
+    return transform_points(points, side, block_size, start)
         
 def transform_points(points, side, block_size, offset):
     """
@@ -280,13 +286,8 @@ def transform_points(points, side, block_size, offset):
             rx, ry = -sx, -sy
         elif side == "LEFT":
             rx, ry = sy, -sx
-        else:
-            print("Invalid side provided use (top, right, bottom, left)")
-            return []
-    
-        final_x = off_x + rx
-        final_y = off_y + ry
-        new_points.append((int(final_x), int(final_y)))
+
+        new_points.append((int(off_x + rx), int(off_y + ry)))
     
     return new_points
 
@@ -311,5 +312,10 @@ def generate_curve(num_points, p0, p1, p2, p3):
     return path
 
 if __name__ == "__main__":
-    image = cv2.imread('img/Grumpy_Kitty.png')
-    generate_jigsaw_img(image, 10)
+    parser = argparse.ArgumentParser(description="Jigsaw Puzzle Generator")
+    parser.add_argument("image_path", help="Path to the input image")
+    parser.add_argument("--dims", type=int, default=10, help="Grid size (e.g., 10 for 10x10 puzzle)")
+    
+    args = parser.parse_args()
+    
+    generate_jigsaw_img(args.image_path, args.dims)
